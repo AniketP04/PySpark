@@ -1,0 +1,149 @@
+drawbacks of hadoop
+	it was made for batch processing.
+	slow processing because not in memory computation
+	not fault tolerant in terms of coputation
+	no mechanism for caching, persistance  
+
+it is an distributed computation framework
+it doesnt have any separate storage or file system
+spark is faster than hadoop
+capabilities to persist data in memory
+here other resource manager can also work with spark (YARN, kubernets, mesos, spark own cluster manager)
+good fit for batch and real time processing
+provide high level API or libraries
+ 
+SPARK ARCHITECTURE
+	spark follows master slave architecture
+	spark worker node
+	
+To submit a job on spark cluster (SYNTAX)
+	spark-submit file_name.py how_many_executor how_much_memory_for_each_executor number_of_CPU_cores_in_each_executor other_param
+	
+Driver Program
+	it acts like a main method which will create the spark context
+	the first method which will be created
+Spark context or spark session
+	it is the entry point to spark core of spark application
+	it will connect our spark application with execution environment or cluster
+	it create job execution graph, manages partitions, scheduling
+	Before Spark 2.0.0 spark context was used separately. after spark 2.0.0+ spark session does all the thing.
+Clients
+	can be any machine from where we are sending our spark job for execution
+	remote server, web interface
+Resource Manager
+	it will create one container (isolated or free space inside the physical machine) and start application master service in it.
+	application master will request to resource manager for complete resource allocation or to start the required executors (virtual entity which will have CPU, memory)
+		executors does the actual computation on partitioned data
+	resource manager will create  required  number of executors for processing
+	executors will start interacting with driver program to send the updates for job progress and other metadata information. 
+Task
+	smallest unit of execution
+	each task will process one data partition
+	one task will be executing on one CPU core
+	one executor can run multiple tasks and equal to number of CPU cores
+	
+RDD Resilient distributed dataset
+	RDD are the main logical data units in spark. they are distributed collection of object, which are stored in memory or on disks of different machines on cluster.
+	Resilience		RDD tract data liveage information (liveage graph) to recover from failed state automatically. it is also known as fault- tolerance.
+	Distributed		data present in an RDD resides on multiple nodes
+	Lazy evaluation	data does not get loaded in an RDD even if you define it
+	Immutability	data stored in an RDD in the read only mode that means you cant edit the data present in RDD
+	In- memory computation	An RDD stores any intermediate data that is generated in the RAM so that faster access can be provided
+
+Transformation 
+	it is a function that produces a new RDD from existing RDD. it takes RDD as input and generate new RDD as a output.
+	There are two types of transformation
+		Narrow transformation	no data shuffling
+								map, flatmap, filter, union, sample 
+		Wide transformation		all the elements that are required to compute the records in a single partition, may live in many partition of the parent RDD
+								data will shuffling
+								reduceBykey, groupby key, repartition, coalesce, join 
+
+Action in spark
+	data will not get loaded in spark until and unless action is perform
+	it is one way of sending data from executor to the driver
+	count, collect, take, top, reduce, aggregate
+	
+1 core will process one partition
+
+SPARK MEMORY MANAGEMENT
+
+Reserved memory	
+	storage for running executor. it will store the data of internal processing which is rrequired to execute container. After 1.6 version it is fix 300MB.
+User memory 
+	stores the data structure metadata and user defined data structures
+Storage memory
+	it stores cache data, data of broadcast variables/RDD.
+Execution memory
+	storage for the data required for task executions, shuffle, join, aggregation
+	
+Common Error
+	executor is out of memory
+	
+	
+EXAMPLE		executor-memory (java heap)= 4GB
+Two parameter which control the entire memory distribution in spark:
+	spark.memory.fraction (75% (default))
+	spark.memory.storagefraction (50%(default))
+Reserved memory= 300MB (default)
+User memory
+	formula= (java_heap - reserved_mem) * (1 - spark.memory.fraction)
+	= (4096MB - 300MB) * (1 - 0.75)
+Storage memory
+	formula= (java_heap - reserved_mem) * spark.memory.fraction * spark.memory.storagefraction
+Execution memory
+	formula= (java_heap - reserved_mem) * spark.memory.fraction * (1 - spark.memory.storagefraction)
+
+
+RULES FOR EXECUTION AND STORAGE MEMORY
+	storage memory can borrow space from execution memory only if blocks (memory blocks) are not used in execution memory
+	execution memory can also borrow space from storage memory if blocks are not used in storage memory
+	if blocks from execution memory is used by storage memory and execution needs more memory, it can forcefully evict the excess blocks occupied by storage memory
+	if blocks from storage memory is used by execution memory and storage memory needs more memory, it cannot forcefully evict the excess blocks occupied by execution memory. it will end up having less memory area. it will wait until spark releases the excess blocks stored by execution memory and then occupies them.
+	
+
+RESOURCE ALLOCATION FOR SPARK APPLICATION
+	num- executors
+	executor- memory
+	executor- cores
+CASE1:	Hardware= 6 nodes, each node have 16 cores and 64GB RAM
+	how many CPU cores for each executor?
+		Recommended is 5CPU cores for each executor
+		1GB and 1 core of each node will be required for operating system
+		left resources for each node after above statement
+			1 node= 15 cores and 63GB memory
+	
+	how many executors?
+		1 executor will have 5 cores
+		15 cores= 15/5 executors
+		1 node= 3 executor
+		total executor on cluster= 3 * 6 = 18 executor
+		1 executor will be created by YARN as aplication master. So find executors which we should mention in num_executor= 18-1= 17 executor
+	memory for each executor?
+		1 node = 3 executor
+		1 node= 63GB RAM
+		1 executor= 63/3 = 21GB
+		
+spark.memory.overhead= 10% of executor memory
+executor- memory= 19GB
+overhead= 1.9GB
+total= 20.9GB = 20.9 * 3 = 62.7GB
+
+Actual formula for overhead memory = max( 384MB, 0.07 * executor.memory)
+	max( 384MB, 1.47GB (0.07 * 21GB))
+	= 1.47GB
+we need to subtract overhead memory 
+	final executor= 21GB - 1.47GB
+	Memory for each executor= approx. 19GB
+	
+Broadcast join 
+	after applying broadcast join, small dataframe will be cached in each executor
+	
+Difference between repartition and coalesce
+
+repartition:
+	it can increase and decrease the value of number of partitions
+	full shuffling
+coalesce:
+	we can only decrease the number of partitions
+	no full shuffling
